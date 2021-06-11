@@ -3,11 +3,12 @@
     <PropertyGroup>
         <TargetFramework>net5.0</TargetFramework>
         <Title>JSON.net Converters</Title>
-        <Authors>Hypo Dwarf</Authors>
+        <Authors>hypodwarf</Authors>
         <Description>Provides handy converters for Newtonsoft.Json (a.k.a JSON.net)</Description>
         <Copyright>2021</Copyright>
         <PackageLicenseUrl>https://github.com/hypodwarf/JsonNetConverters/blob/master/LICENSE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/hypodwarf/JsonNetConverters</RepositoryUrl>
+        <PackageVersion>0.0.1</PackageVersion>
     </PropertyGroup>
 
     <ItemGroup>
