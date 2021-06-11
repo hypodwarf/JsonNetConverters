@@ -4,6 +4,11 @@ using Newtonsoft.Json;
 
 namespace JsonNetConverters
 {
+    /**
+     * The base JSON.net package has trouble deserializing System.Enum objects. This converter will package Enum objects
+     * as a KeyValuePair object, where the key is the fully qualified assembly name of the enum and the value is the
+     * specific enum in that group.
+     */
     public class KeyValuePairEnumConverter: JsonConverter<Enum>
     {
         public override Enum ReadJson(JsonReader reader, Type objectType, Enum existingValue, bool hasExistingValue,
@@ -19,7 +24,7 @@ namespace JsonNetConverters
         {
             if (value != null)
                 serializer.Serialize(writer,
-                    new KeyValuePair<string, string>(value.GetType().FullName, value.ToString()));
+                    new KeyValuePair<string, string>(value.GetType().AssemblyQualifiedName, value.ToString()));
         }
     }
 }
