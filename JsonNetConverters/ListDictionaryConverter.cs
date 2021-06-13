@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using Newtonsoft.Json;
 
 namespace JsonNetConverters
@@ -13,7 +12,7 @@ namespace JsonNetConverters
      */
     public class ListDictionaryConverter : JsonConverter
     {
-        private (Type kvp, Type list, Type enumerable, Type[] args) GetTypes(Type objectType)
+        private static (Type kvp, Type list, Type enumerable, Type[] args) GetTypes(Type objectType)
         {
             var args = objectType.GenericTypeArguments;
             var kvpType = typeof(KeyValuePair<,>).MakeGenericType(args);
@@ -22,39 +21,37 @@ namespace JsonNetConverters
 
             return (kvpType, listType, enumerableType, args);
         }
-        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            var (kvpType, listType, enumerableType, args) = GetTypes(value.GetType());
+            var (kvpType, listType, _, args) = GetTypes(value.GetType());
             
-            var keys = ((IDictionary)value)?.Keys.GetEnumerator();
-            var values = ((IDictionary)value)?.Values.GetEnumerator();
+            var keys = ((IDictionary)value).Keys.GetEnumerator();
+            var values = ((IDictionary)value).Values.GetEnumerator();
             var cl = listType.GetConstructor(Array.Empty<Type>());
             var ckvp = kvpType.GetConstructor(args);
-            // IList list = new List<KeyValuePair<object, object>>();
-            var list = (IList)cl.Invoke(Array.Empty<object?>());
-            while (keys != null && keys.MoveNext() && values.MoveNext())
+            
+            var list = (IList)cl!.Invoke(Array.Empty<object>());
+            while (keys.MoveNext() && values.MoveNext())
             {
-                list.Add(ckvp.Invoke(new []{keys.Current, values.Current}));
+                list.Add(ckvp!.Invoke(new []{keys.Current, values.Current}));
             }
             
             serializer.Serialize(writer, list);
         }
 
-        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            var (kvpType, listType, enumerableType, args) = GetTypes(objectType);
+            var (_, listType, enumerableType, args) = GetTypes(objectType);
             
             var list = ((IList)(serializer.Deserialize(reader, listType)));
-            
-            Type ciType = objectType;
-            if (objectType.IsAbstract || objectType.IsInterface)
-            {
-                ciType = typeof(Dictionary<,>).MakeGenericType(args);
-            }
-  
-            var ci = ciType.GetConstructor(new[] {enumerableType});
 
-            var dict = (IDictionary) ci?.Invoke(new object?[]{ list });
+            var ci = objectType.GetConstructor(new[] {enumerableType});
+            if (ci == null)
+            {
+                ci = typeof(Dictionary<,>).MakeGenericType(args).GetConstructor(new[] {enumerableType});
+            }
+            
+            var dict = (IDictionary) ci!.Invoke(new object[]{ list });
 
             return dict;
         }
