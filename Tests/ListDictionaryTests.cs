@@ -1,6 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
+using System.Collections.ObjectModel;
 using JsonNetConverters;
 using Newtonsoft.Json;
 using NUnit.Framework;
@@ -44,17 +45,39 @@ namespace Tests
             public string name;
             public int value;
         }
-
-        [DataContract]
+        
         public class Specialized : Dictionary<TestObj, TestObj>
         {
         }
         
-        private JsonSerializerSettings jsonSerializeSettings = new JsonSerializerSettings
+        private JsonSerializerSettings jsonSerializeSettings_None = new JsonSerializerSettings
+        {
+            Converters = new List<JsonConverter>(){new ListDictionaryConverter()},
+            TypeNameHandling = TypeNameHandling.None
+        };
+        
+        private JsonSerializerSettings jsonSerializeSettings_All = new JsonSerializerSettings
         {
             Converters = new List<JsonConverter>(){new ListDictionaryConverter()},
             TypeNameHandling = TypeNameHandling.All
         };
+
+        private void Marble<T>(T obj) where T : IDictionary
+        {
+            var jsonAll = JsonConvert.SerializeObject(obj, jsonSerializeSettings_All);
+            var deObjAll = JsonConvert.DeserializeObject<T>(jsonAll, jsonSerializeSettings_All);
+            Assert.AreEqual(obj, deObjAll);
+            
+            var json = JsonConvert.SerializeObject(obj, jsonSerializeSettings_None);
+            Console.WriteLine(json);
+            var deObj = JsonConvert.DeserializeObject<T>(json, jsonSerializeSettings_None);
+            Assert.AreEqual(obj, deObj);
+            
+            //Can also be deserialized as an array of key value pairs
+            var (_, kvpType) = ListDictionaryConverter.GetTypeInfo(typeof(T));
+            dynamic arr = JsonConvert.DeserializeObject(json, kvpType.MakeArrayType() ,jsonSerializeSettings_None);
+            Assert.AreEqual(obj.Count, arr!.Length);
+        }
 
         [Test]
         public void MarbleTest()
@@ -76,41 +99,23 @@ namespace Tests
                 {new TestStruct{name = "One", value = 1}, new TestStruct{name = "Two", value = 2}}, 
                 {new TestStruct{name = "Three", value = 3}, new TestStruct{name = "Four", value = 4}}
             };
-
-            var jsonEmpty = JsonConvert.SerializeObject(dictEmpty, jsonSerializeSettings);
-            Console.WriteLine(jsonEmpty);
-            var deEmpty = JsonConvert.DeserializeObject<Dictionary<int, int>>(jsonEmpty, jsonSerializeSettings);
-            Assert.AreEqual(dictEmpty, deEmpty);
+            var dictReadOnly = new ReadOnlyDictionary<TestStruct, TestStruct>(dictStruct);
+            var dictSorted = new SortedDictionary<string, string>(dictString);
+            
+            Marble(dictEmpty);
             
             var jsonITest = JsonConvert.SerializeObject(dictInt);
             Console.WriteLine(jsonITest);
             var deInterface = JsonConvert.DeserializeObject<IDictionary<int, int>>(jsonITest);
             Assert.AreEqual(dictInt, deInterface);
             
-            var jsonInt = JsonConvert.SerializeObject(dictInt, jsonSerializeSettings);
-            Console.WriteLine(jsonInt);
-            var deInt = JsonConvert.DeserializeObject<Dictionary<int, int>>(jsonInt, jsonSerializeSettings);
-            Assert.AreEqual(dictInt, deInt);
-            
-            var jsonString = JsonConvert.SerializeObject(dictString, jsonSerializeSettings);
-            Console.WriteLine(jsonString);
-            var deString = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonString, jsonSerializeSettings);
-            Assert.AreEqual(dictString, deString);
-            
-            var jsonObj = JsonConvert.SerializeObject(dictObj, jsonSerializeSettings);
-            Console.WriteLine(jsonObj);
-            var deObj = JsonConvert.DeserializeObject<Dictionary<TestObj, TestObj>>(jsonObj, jsonSerializeSettings);
-            Assert.AreEqual(dictObj, deObj);
-            
-            var jsonStruct = JsonConvert.SerializeObject(dictStruct, jsonSerializeSettings);
-            Console.WriteLine(jsonStruct);
-            var deStruct = JsonConvert.DeserializeObject<Dictionary<TestStruct, TestStruct>>(jsonStruct, jsonSerializeSettings);
-            Assert.AreEqual(dictStruct, deStruct);
-            
-            var jsonSpecialized = JsonConvert.SerializeObject(dictSpecialized, jsonSerializeSettings);
-            Console.WriteLine(jsonSpecialized);
-            var deSpecialized = JsonConvert.DeserializeObject<Specialized>(jsonSpecialized, jsonSerializeSettings);
-            Assert.AreEqual(dictSpecialized, deSpecialized);
+            Marble(dictInt);
+            Marble(dictString);
+            Marble(dictObj);
+            Marble(dictStruct);
+            Marble(dictSpecialized);
+            Marble(dictReadOnly);
+            Marble(dictSorted);
         }
     }
 }

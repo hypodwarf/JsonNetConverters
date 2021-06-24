@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using Newtonsoft.Json;
 
 namespace JsonNetConverters
@@ -12,24 +13,24 @@ namespace JsonNetConverters
      */
     public class ListDictionaryConverter : JsonConverter
     {
-        private static Type GetKvpType(Type objectType)
+        public static (Type dictType, Type kvpType) GetTypeInfo(Type objectType)
         {
             var type = objectType;
-            while (type != null)
+            while (type.BaseType!.IsAssignableTo(typeof(IDictionary)))
             {
-                if(IsDictionary(type)) break;
                 type = type.BaseType;
             }
             
             var args = type?.GenericTypeArguments;
             var kvpType = typeof(KeyValuePair<,>).MakeGenericType(args!);
+            var dictType = typeof(Dictionary<,>).MakeGenericType(args!);
 
-            return kvpType;
+            return (dictType, kvpType);
         }
         
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            var kvpType = GetKvpType(value.GetType());
+            var (_, kvpType) = GetTypeInfo(value.GetType());
             
             IDictionary dict = ((IDictionary) value);
             Array arr = Array.CreateInstance(kvpType, dict.Count);
@@ -40,13 +41,14 @@ namespace JsonNetConverters
 
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            var kvpType = GetKvpType(objectType);
+            var (dictType, kvpType) = GetTypeInfo(objectType);
             
             dynamic arr = (serializer.Deserialize(reader, kvpType.MakeArrayType()));
+            dynamic tempDict = Activator.CreateInstance(dictType, arr);
 
             try
             {
-                return Activator.CreateInstance(objectType, arr);
+                return Activator.CreateInstance(objectType, tempDict);
             }
             catch (MissingMethodException)
             {
@@ -61,22 +63,9 @@ namespace JsonNetConverters
             }
         }
 
-        private static bool IsDictionary(Type type)
-        {
-            return type.IsGenericType && type.GetGenericTypeDefinition().IsEquivalentTo(typeof(Dictionary<,>));
-        }
-        
         public override bool CanConvert(Type objectType)
         {
-            bool isDict = false;
-            var type = objectType;
-            while (!isDict && type != null)
-            {
-                isDict = IsDictionary(type);
-                type = type.BaseType;
-            }
-
-            return isDict;
+            return objectType.IsAssignableTo(typeof(IDictionary));
         }
     }
 }
