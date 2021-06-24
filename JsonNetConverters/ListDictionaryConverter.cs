@@ -12,56 +12,71 @@ namespace JsonNetConverters
      */
     public class ListDictionaryConverter : JsonConverter
     {
-        private static (Type kvp, Type list, Type enumerable, Type[] args) GetTypes(Type objectType)
+        private static Type GetKvpType(Type objectType)
         {
-            var args = objectType.GenericTypeArguments;
-            var kvpType = typeof(KeyValuePair<,>).MakeGenericType(args);
-            var listType = typeof(List<>).MakeGenericType(kvpType);
-            var enumerableType = typeof(IEnumerable<>).MakeGenericType(kvpType);
-
-            return (kvpType, listType, enumerableType, args);
-        }
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-        {
-            var (kvpType, listType, _, args) = GetTypes(value.GetType());
-            
-            var keys = ((IDictionary)value).Keys.GetEnumerator();
-            var values = ((IDictionary)value).Values.GetEnumerator();
-            var cl = listType.GetConstructor(Array.Empty<Type>());
-            var ckvp = kvpType.GetConstructor(args);
-            
-            var list = (IList)cl!.Invoke(Array.Empty<object>());
-            while (keys.MoveNext() && values.MoveNext())
+            var type = objectType;
+            while (type != null)
             {
-                list.Add(ckvp!.Invoke(new []{keys.Current, values.Current}));
+                if(IsDictionary(type)) break;
+                type = type.BaseType;
             }
             
-            serializer.Serialize(writer, list);
+            var args = type?.GenericTypeArguments;
+            var kvpType = typeof(KeyValuePair<,>).MakeGenericType(args!);
+
+            return kvpType;
+        }
+        
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            var kvpType = GetKvpType(value.GetType());
+            
+            IDictionary dict = ((IDictionary) value);
+            Array arr = Array.CreateInstance(kvpType, dict.Count);
+            dict.CopyTo(arr, 0);
+            
+            serializer.Serialize(writer, arr);
         }
 
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            var (_, listType, enumerableType, args) = GetTypes(objectType);
+            var kvpType = GetKvpType(objectType);
             
-            var list = ((IList)(serializer.Deserialize(reader, listType)));
+            dynamic arr = (serializer.Deserialize(reader, kvpType.MakeArrayType()));
 
-            var ci = objectType.GetConstructor(new[] {enumerableType});
-            if (ci == null)
+            try
             {
-                ci = typeof(Dictionary<,>).MakeGenericType(args).GetConstructor(new[] {enumerableType});
+                return Activator.CreateInstance(objectType, arr);
             }
-            
-            var dict = (IDictionary) ci!.Invoke(new object[]{ list });
+            catch (MissingMethodException)
+            {
+                IDictionary dict = (IDictionary)Activator.CreateInstance(objectType);
+                if (arr != null)
+                    foreach (dynamic kvp in arr)
+                    {
+                        dict?.Add(kvp.Key, kvp.Value);
+                    }
 
-            return dict;
+                return dict;
+            }
         }
 
+        private static bool IsDictionary(Type type)
+        {
+            return type.IsGenericType && type.GetGenericTypeDefinition().IsEquivalentTo(typeof(Dictionary<,>));
+        }
+        
         public override bool CanConvert(Type objectType)
         {
-            if (!objectType.IsGenericType) return objectType.IsAssignableTo(typeof(IDictionary));
-            
-            var args = objectType.GenericTypeArguments;
-            return args.Length == 2 && objectType.IsAssignableTo(typeof(IDictionary<,>).MakeGenericType(args));
+            bool isDict = false;
+            var type = objectType;
+            while (!isDict && type != null)
+            {
+                isDict = IsDictionary(type);
+                type = type.BaseType;
+            }
+
+            return isDict;
         }
     }
 }

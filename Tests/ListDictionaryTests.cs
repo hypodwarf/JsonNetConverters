@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using JsonNetConverters;
 using Newtonsoft.Json;
 using NUnit.Framework;
@@ -43,16 +44,25 @@ namespace Tests
             public string name;
             public int value;
         }
+
+        [DataContract]
+        public class Specialized : Dictionary<TestObj, TestObj>
+        {
+        }
         
         private JsonSerializerSettings jsonSerializeSettings = new JsonSerializerSettings
         {
             Converters = new List<JsonConverter>(){new ListDictionaryConverter()},
-            TypeNameHandling = TypeNameHandling.None
+            TypeNameHandling = TypeNameHandling.All
         };
 
         [Test]
         public void MarbleTest()
         {
+            var dictSpecialized = new Specialized {
+                {new TestObj("One", 1), new TestObj("Two", 2)}, 
+                {new TestObj("Three", 3), new TestObj("Four", 4)}
+            };
             var dictEmpty = new Dictionary<int, int>();
             var dictInt = new Dictionary<int, int> { {1,2}, {3,4} };
             var dictString = new Dictionary<string, string> { {"One","Two"}, {"Three","Four"} };
@@ -97,6 +107,10 @@ namespace Tests
             var deStruct = JsonConvert.DeserializeObject<Dictionary<TestStruct, TestStruct>>(jsonStruct, jsonSerializeSettings);
             Assert.AreEqual(dictStruct, deStruct);
             
+            var jsonSpecialized = JsonConvert.SerializeObject(dictSpecialized, jsonSerializeSettings);
+            Console.WriteLine(jsonSpecialized);
+            var deSpecialized = JsonConvert.DeserializeObject<Specialized>(jsonSpecialized, jsonSerializeSettings);
+            Assert.AreEqual(dictSpecialized, deSpecialized);
         }
     }
 }
